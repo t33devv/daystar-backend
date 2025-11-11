@@ -1,0 +1,20 @@
+
+###
+GET http://localhost:1337/habits
+
+###
+POST http://localhost:1337/habits
+Content-Type: application/json
+
+{
+  "title": "english",
+  "description": "my first todo",
+  "colour": "Blue"
+}
+
+###
+GET http://localhost:1337/habits/setup
+
+
+###
+GET http://localhost:1337/auth/setup
