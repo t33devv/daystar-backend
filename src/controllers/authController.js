@@ -2,7 +2,13 @@ const { OAuth2Client } = require('google-auth-library');
 const userModel = require('../models/userModel');
 const { generateToken } = require('../utils/jwt');
 
+const bcrypt = require('bcrypt');
+
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const SALT_ROUNDS = 10;
+
+const { validateEmail, validatePassword } = require('../utils/validators');
 
 const authController = {
     // Setup users table
@@ -14,6 +20,127 @@ const authController = {
                 message: 'Users table created successfully' 
             });
         } catch (error) {
+            next(error);
+        }
+    },
+
+    register: async (req, res, next) => {
+        try {
+            const { email, password, name } = req.body;
+
+            if (!email || !password) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email and password are required'
+                });
+            }
+
+            if (password.length < 8) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Password must be at least 8 characters'
+                })
+            }
+
+            if (!validateEmail(email)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid email format'
+                });
+            }
+
+            const passwordValidation = validatePassword(password);
+            if (!passwordValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    errors: 'Password does not meet requirements',
+                    details: passwordValidation.errors
+                });
+            }
+
+            const existingUser = await userModel.findByEmail(email);
+
+            if (existingUser) {
+                return res.status(409).json({
+                    success: false,
+                    error: 'Email already registered'
+                })
+            }
+
+            const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+            const user = await userModel.createWithPassword({
+                email,
+                passwordHash,
+                name: name || email.split('@')[0]
+            });
+
+            const token = generateToken(user);
+
+            res.status(201).json({
+                success: true,
+                token: token,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    picture: user,picture
+                }
+            })
+        } catch (error) {
+            console.error('Registration error:', error);
+            next(error);
+        }
+    },
+    
+    login: async (req, res, next) => {
+        try {
+            const { email, password } = req.body;
+
+            if (!email || !password) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email and password are required'
+                });
+            }
+
+            const user = await userModel.findByEmail(email);
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    error: 'Invalid email or password'
+                });
+            }
+
+            if (user.auth_provider === 'google') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'This email is registered with Google. Please sign in with Google.'
+                });
+            }
+
+            const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+            if (!isPasswordValid) {
+                return res.status(401).json({
+                    success: false,
+                    error: 'Invalid email or password'
+                });
+            }
+
+            const token = generateToken(user);
+
+            res.status(200).json({
+                success: true,
+                token: token,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    picture: user.picture
+                }
+            });
+        } catch (error) {
+            console.log('Login error:', error);
             next(error);
         }
     },
@@ -98,7 +225,8 @@ const authController = {
             success: true,
             token: newToken 
         });
-    }
+    },
+
 };
 
 module.exports = authController;

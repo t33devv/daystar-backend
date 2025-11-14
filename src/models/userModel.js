@@ -19,28 +19,52 @@ const userModel = {
         return result.rows[0];
     },
 
-    // Create new user
-    createNewUser: async ({ googleId, email, name, picture }) => {
+    createWithPassword: async ({ email, passwordHash, name }) => {
         const result = await pool.query(
-            `INSERT INTO users (google_id, email, name, picture) 
-             VALUES ($1, $2, $3, $4) 
-             RETURNING *`,
-            [googleId, email, name, picture]
+            `INSERT INTO users (email, password_hash, name, auth_provider)
+            VALUES ($1, $2, $3, 'local')
+            RETURNING id, email, name, picture, auth_provider, created_at`,
+            [email, passwordHash, name]
         );
         return result.rows[0];
+    },
+
+    createWithGoogle: async ({ googleId, email, name, picture }) => {
+        const result = await pool.query(
+            `INSERT INTO users (google_id, email, name, picture, auth_provider)
+            VALUES ($1, $2, $3, $4, 'google')
+            RETURNING id, email, name, picture, auth_provider, creataed_at`,
+            [googleId, email, name, picture]
+        )
+        return result.rows[0];
+    },
+
+    findByEmail: async (email) => {
+        const result = await pool.query(
+            'SELECT * FROM users WHERE email = $1',
+            [email]
+        );
+        return result.rows[0];
+    },
+
+    // Update user model's createNewUser to use createWithGoogle
+    createNewUser: async ({ googleId, email, name, picture }) => {
+        return await userModel.createWithGoogle({ googleId, email, name, picture });
     },
 
     // Just the database query, no req/res
     setupTable: async () => {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                google_id VARCHAR(255) UNIQUE NOT NULL,
-                email VARCHAR(255) NOT NULL,
-                name VARCHAR(255),
-                picture TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
+            id SERIAL PRIMARY KEY,
+            google_id VARCHAR(255) UNIQUE,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255),
+            name VARCHAR(255),
+            picture TEXT,
+            auth_provider VARCHAR(50) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         `);
     }
 };

@@ -6,6 +6,11 @@ const { authenticateToken } = require('../middleware/authToken');
 // Setup database
 router.post('/setup', authController.setupUsersTable);
 
+
+router.post('/register', authController.register);
+
+router.post('/login', authController.login);
+
 // Google Sign-In (from React Native)
 router.post('/google', authController.googleSignIn);
 
