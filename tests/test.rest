@@ -17,4 +17,4 @@ GET http://localhost:1337/habits/setup
 
 
 ###
-GET http://localhost:1337/auth/setup
+POST http://localhost:1337/api/auth/setup

@@ -8,7 +8,7 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const SALT_ROUNDS = 10;
 
-const { validateEmail, validatePassword } = require('../utils/validators');
+const { validateEmail, validatePassword } = require('../utils/validation');
 
 const authController = {
     // Setup users table
@@ -84,7 +84,7 @@ const authController = {
                     id: user.id,
                     email: user.email,
                     name: user.name,
-                    picture: user,picture
+                    picture: user.picture
                 }
             })
         } catch (error) {
