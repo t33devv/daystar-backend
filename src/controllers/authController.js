@@ -9,8 +9,53 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const SALT_ROUNDS = 10;
 
 const { validateEmail, validatePassword } = require('../utils/validation');
+const { json } = require('express');
 
 const authController = {
+
+    updateProfile: async (req, res, next) => {
+        try {
+            const userId = req.user.id;
+            const { name, password } = req.body;
+
+            if (!name) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Name is required'
+                });
+            }
+
+            let passwordHash = null;
+            if (password) {
+                // Validate password if provided
+                const passwordValidation = validatePassword(password);
+                if (!passwordValidation.valid) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Invalid password',
+                        details: passwordValidation.errors
+                    });
+                }
+                passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+            }
+
+            const updatedUser = await userModel.updateProfile(userId, name, passwordHash);
+            
+            res.status(200).json({
+                success: true,
+                message: 'Profile updated successfully',
+                user: {
+                    id: updatedUser.id,
+                    email: updatedUser.email,
+                    name: updatedUser.name,
+                    picture: updatedUser.picture
+                }
+            });
+        } catch (error) {
+            console.error('Update profile error:', error);
+            next(error);
+        }
+    },
     // Setup users table
     setupUsersTable: async (req, res, next) => {
         try {
@@ -20,6 +65,23 @@ const authController = {
                 message: 'Users table created successfully' 
             });
         } catch (error) {
+            next(error);
+        }
+    },
+
+    checkPassword: async (req, res, next) => {
+        try {
+            const { password } = req.body;
+
+            const passwordValidation = validatePassword(password);
+            if (!passwordValidation) {
+                return res.status(400).json({
+                    success: false,
+                    details: passwordValidation.errors
+                })
+            }
+        } catch (error) {
+            console.error('Password check} error:', error);
             next(error);
         }
     },
@@ -35,10 +97,10 @@ const authController = {
                 });
             }
 
-            if (password.length < 8) {
+            if (password.length < 6) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Password must be at least 8 characters'
+                    error: 'Password must be at least 6 characters'
                 })
             }
 

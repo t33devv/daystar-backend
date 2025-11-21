@@ -1,6 +1,39 @@
 const pool = require('../config/db');
 
 const userModel = {
+    updateName: async (userId, name) => {
+        const result = await pool.query(
+            'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, email, name, picture',
+            [name, userId]
+        );
+        return result.rows[0];
+    },
+
+    // Update user password
+    updatePassword: async (userId, passwordHash) => {
+        const result = await pool.query(
+            'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id, email, name, picture',
+            [passwordHash, userId]
+        );
+        return result.rows[0];
+    },
+
+    // Update both name and password
+    updateProfile: async (userId, name, passwordHash) => {
+        if (passwordHash) {
+            const result = await pool.query(
+                'UPDATE users SET name = $1, password_hash = $2 WHERE id = $3 RETURNING id, email, name, picture',
+                [name, passwordHash, userId]
+            );
+            return result.rows[0];
+        } else {
+            const result = await pool.query(
+                'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, email, name, picture',
+                [name, userId]
+            );
+            return result.rows[0];
+        }
+    },
     // Find user by ID
     findById: async (id) => {
         const result = await pool.query(
