@@ -1,5 +1,7 @@
 const express = require('express');
-const cors = require('cors');  // ← Add this
+const cors = require('cors');
+const path = require('path');
+
 const habitRoutes = require('./routes/habits');
 const authRoutes = require('./routes/auth');
 const errorHandler = require('./middleware/errorHandler');
@@ -18,6 +20,9 @@ app.use('/api/habits', habitRoutes);
 app.get('/', (req, res) => {
     res.json({ status: 'API is running', version: '1.0.0' });
 });
+
+// Image uploading
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Error handling (must be last)
 app.use(errorHandler);

@@ -1,5 +1,7 @@
 const habitModel = require('../models/habitModel');
 
+const userStatsModel = require('../models/userStatsModel')
+
 const habitController = {
     getAllHabits: async (req, res, next) => {
         try {
@@ -27,23 +29,49 @@ const habitController = {
             // Reset expired streaks first
             await habitModel.resetExpiredStreaks(userId);
             
-            // Then fetch habits (which will also check expiration)
+            // Fetch habits for active habits count
             const habits = await habitModel.getAll(userId);
-            const bestStreak = await habitModel.getBestStreak(userId);
-            const totalCheckIns = await habitModel.getTotalCheckIns(userId);
+            
+            // Get stats from user_stats table (persistent even after habit deletion)
+            const userStats = await userStatsModel.get(userId);
 
             res.status(200).json({ 
                 success: true,
                 stats: {
                     activeHabits: habits.filter(h => h.streak > 0 || h.last_check_in !== null).length,
-                    bestStreak: bestStreak,
-                    totalCheckIns: totalCheckIns
+                    bestStreak: userStats.best_streak || 0,
+                    totalCheckIns: userStats.total_check_ins || 0
                 }
             });
         } catch (error) {
             next(error);
         }
     },
+
+    uploadImage: async (req, res, next) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'No image file provided'
+                });
+            }
+
+            // Return the file path/URL
+            // In production, you'd upload to S3/Cloudinary and return that URL
+            const imageUrl = `/uploads/${req.file.filename}`;
+            
+            res.status(200).json({
+                success: true,
+                imageUrl: imageUrl,
+                message: 'Image uploaded successfully'
+            });
+        } catch (error) {
+            console.error('Image upload error:', error);
+            next(error);
+        }
+    },
+
 
     createHabit: async (req, res, next) => {
         try {
@@ -100,12 +128,11 @@ const habitController = {
         }
     },
 
-    // NEW: Check in to habit
     checkIn: async (req, res, next) => {
         try {
             const userId = req.user.id;
             const habitId = req.params.id;
-            const { localDate } = req.body; // Get local date from frontend
+            const { localDate, imageUrl } = req.body; // Get local date from frontend
 
             if (!localDate) {
                 return res.status(400).json({ 
@@ -123,7 +150,7 @@ const habitController = {
                 });
             }
 
-            const habit = await habitModel.checkIn(habitId, userId, localDate);
+            const habit = await habitModel.checkIn(habitId, userId, localDate, imageUrl);
             res.status(200).json({ 
                 success: true,
                 message: 'Check-in successful!',
@@ -141,21 +168,48 @@ const habitController = {
         }
     },
 
-    // NEW: Get user stats
-    getStats: async (req, res, next) => {
+    getCheckIns: async (req, res, next) => {
         try {
             const userId = req.user.id;
-            const habits = await habitModel.getAll(userId);
-            const bestStreak = await habitModel.getBestStreak(userId);
-            const totalCheckIns = await habitModel.getTotalCheckIns(userId);
+            const habitId = req.params.id;
 
+            // Verify habit belongs to user
+            const existingHabit = await habitModel.getById(habitId, userId);
+            if (!existingHabit) {
+                return res.status(404).json({ 
+                    success: false,
+                    error: 'Habit not found' 
+                });
+            }
+
+            const checkIns = await habitModel.getCheckIns(habitId, userId);
             res.status(200).json({ 
                 success: true,
-                stats: {
-                    activeHabits: habits.length,
-                    bestStreak: bestStreak,
-                    totalCheckIns: totalCheckIns
-                }
+                checkIns 
+            });
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    deleteHabit: async (req, res, next) => {
+        try {
+            const userId = req.user.id;
+            const habitId = req.params.id;
+
+            // Verify habit belongs to user
+            const existingHabit = await habitModel.getById(habitId, userId);
+            if (!existingHabit) {
+                return res.status(404).json({ 
+                    success: false,
+                    error: 'Habit not found' 
+                });
+            }
+
+            await habitModel.delete(habitId, userId);
+            res.status(200).json({ 
+                success: true,
+                message: 'Habit deleted successfully' 
             });
         } catch (error) {
             next(error);

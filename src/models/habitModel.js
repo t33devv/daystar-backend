@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 
+const userStatsModel = require('./userStatsModel')
+
 const habitModel = {
     getAll: async (userId) => {
         // Fetch all habits
@@ -30,6 +32,14 @@ const habitModel = {
         return habits;
     },
 
+    getTotalCheckIns: async (userId) => {
+        const result = await pool.query(
+            'SELECT COUNT(*) as total FROM check_ins WHERE user_id = $1',
+            [userId]
+        );
+        return parseInt(result.rows[0]?.total || 0);
+    },
+
     create: async (userId, title, description, icon, colour) => {
         const result = await pool.query(
             'INSERT INTO habits (user_id, title, description, icon, colour, streak, last_check_in) VALUES ($1, $2, $3, $4, $5, 0, NULL) RETURNING *',
@@ -57,7 +67,7 @@ const habitModel = {
         return result.rows[0];
     },
 
-    checkIn: async (habitId, userId, localDate) => {
+    checkIn: async (habitId, userId, localDate, imageUrl) => {
         // First, get the habit and check if streak should reset
         const habit = await pool.query(
             'SELECT * FROM habits WHERE id = $1 AND user_id = $2',
@@ -105,15 +115,35 @@ const habitModel = {
             newStreak = 1;
         }
 
-        // Update habit with new streak and last_check_in
         const result = await pool.query(
             `UPDATE habits 
-            SET streak = $1, last_check_in = $2 
-            WHERE id = $3 AND user_id = $4 
+            SET streak = $1, last_check_in = $2, image_url = $3
+            WHERE id = $4 AND user_id = $5 
             RETURNING *`,
-            [newStreak, now, habitId, userId]
+            [newStreak, now, imageUrl || null, habitId, userId]
         );
 
+        // Insert into check_ins table for history
+        await pool.query(
+            `INSERT INTO check_ins (habit_id, user_id, check_in_date, image_url)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (habit_id, check_in_date) 
+             DO UPDATE SET image_url = $4`,
+            [habitId, userId, localDate, imageUrl || null]
+        );
+
+        // Update user stats
+        await userStatsModel.incrementCheckIns(userId);
+        await userStatsModel.updateBestStreak(userId, newStreak);
+
+        return result.rows[0];
+    },
+
+    delete: async (habitId, userId) => {
+        const result = await pool.query(
+            'DELETE FROM habits WHERE id = $1 AND user_id = $2 RETURNING *',
+            [habitId, userId]
+        );
         return result.rows[0];
     },
 
@@ -136,19 +166,15 @@ const habitModel = {
         return result.rows;
     },
 
-    // NEW: Get best streak across all habits for a user
     getBestStreak: async (userId) => {
-        const result = await pool.query(
-            'SELECT MAX(streak) as best_streak FROM habits WHERE user_id = $1',
-            [userId]
-        );
-        return result.rows[0]?.best_streak || 0;
+        const userStatsModel = require('./userStatsModel');
+        const userStats = await userStatsModel.get(userId);
+        return userStats?.best_streak || 0;
     },
 
-    // NEW: Get total check-ins (sum of all streaks)
     getTotalCheckIns: async (userId) => {
         const result = await pool.query(
-            'SELECT SUM(streak) as total FROM habits WHERE user_id = $1',
+            'SELECT COUNT(*) as total FROM check_ins WHERE user_id = $1',
             [userId]
         );
         return parseInt(result.rows[0]?.total || 0);
@@ -156,19 +182,44 @@ const habitModel = {
 
     setupTable: async () => {
         await pool.query(`
-            CREATE TABLE IF NOT EXISTS habits (
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'habits' AND column_name = 'image_url'
+                ) THEN
+                    ALTER TABLE habits ADD COLUMN image_url TEXT;
+                END IF;
+            END $$;
+        `);
+
+        // Create check_ins table (only once)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS check_ins (
                 id SERIAL PRIMARY KEY,
+                habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                title VARCHAR(255) NOT NULL,
-                description TEXT,
-                icon VARCHAR(10),
-                colour VARCHAR(50),
-                streak INTEGER DEFAULT 0,
-                last_check_in TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                check_in_date DATE NOT NULL,
+                image_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(habit_id, check_in_date)
             )
         `);
-    }
+
+        // Setup user_stats table
+        const userStatsModel = require('./userStatsModel');
+        await userStatsModel.setupTable();
+    },
+
+    getCheckIns: async (habitId, userId) => {
+        const result = await pool.query(
+            `SELECT * FROM check_ins 
+             WHERE habit_id = $1 AND user_id = $2 
+             ORDER BY check_in_date DESC`,
+            [habitId, userId]
+        );
+        return result.rows;
+    },
 };
 
 module.exports = habitModel;

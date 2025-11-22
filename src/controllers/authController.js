@@ -2,6 +2,8 @@ const { OAuth2Client } = require('google-auth-library');
 const userModel = require('../models/userModel');
 const { generateToken } = require('../utils/jwt');
 
+const userStatsModel = require('../models/userStatsModel');
+
 const bcrypt = require('bcrypt');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -138,6 +140,8 @@ const authController = {
             });
 
             const token = generateToken(user);
+
+            await userStatsModel.initialize(user.id);
 
             res.status(201).json({
                 success: true,
