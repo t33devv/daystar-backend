@@ -70,6 +70,7 @@ const habitController = {
                 imageUrl: imageUrl,
                 message: 'Image uploaded successfully'
             });
+            console.log('Image uploaded successfully.')
         } catch (error) {
             console.error('Image upload error:', error);
             next(error);
@@ -95,6 +96,8 @@ const habitController = {
                 message: 'Habit created successfully', 
                 habit 
             });
+
+            console.log('Habit created successfully')
         } catch (error) {
             next(error);
         }
@@ -127,6 +130,8 @@ const habitController = {
                 message: 'Habit updated successfully', 
                 habit 
             });
+
+            console.log('Habit updated successfully')
         } catch (error) {
             next(error);
         }
@@ -160,6 +165,8 @@ const habitController = {
                 message: 'Check-in successful!',
                 habit 
             });
+
+            console.log('Checked in successfully')
         } catch (error) {
             // Handle "already checked in" error
             if (error.message.includes('already checked in')) {
@@ -215,6 +222,8 @@ const habitController = {
                 success: true,
                 message: 'Habit deleted successfully' 
             });
+
+            console.log('Habit deleted successfully')
         } catch (error) {
             next(error);
         }

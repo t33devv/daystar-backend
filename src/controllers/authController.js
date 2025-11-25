@@ -53,6 +53,8 @@ const authController = {
                     picture: updatedUser.picture
                 }
             });
+
+            console.log('Profile updated successfully')
         } catch (error) {
             console.error('Update profile error:', error);
             next(error);
@@ -153,6 +155,8 @@ const authController = {
                     picture: user.picture
                 }
             })
+
+            console.log('New user updated successfully')
         } catch (error) {
             console.error('Registration error:', error);
             next(error);
@@ -205,6 +209,8 @@ const authController = {
                     picture: user.picture
                 }
             });
+
+            console.log('Logged in successfully')
         } catch (error) {
             console.log('Login error:', error);
             next(error);
