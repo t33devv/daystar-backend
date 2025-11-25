@@ -2,6 +2,8 @@ const habitModel = require('../models/habitModel');
 
 const userStatsModel = require('../models/userStatsModel')
 
+const upload = require('../middleware/upload')
+
 const habitController = {
     getAllHabits: async (req, res, next) => {
         try {
@@ -57,9 +59,11 @@ const habitController = {
                 });
             }
 
-            // Return the file path/URL
-            // In production, you'd upload to S3/Cloudinary and return that URL
-            const imageUrl = `/uploads/${req.file.filename}`;
+            // Upload to Cloudinary
+            const imageUrl = await upload.uploadToCloudinary(
+                req.file.buffer,
+                req.file.originalname
+            );
             
             res.status(200).json({
                 success: true,
